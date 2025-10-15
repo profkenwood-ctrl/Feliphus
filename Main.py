@@ -8,7 +8,7 @@ sns.set(style='dark')
 st.write(
     """
     # Proyek Analisis Data: Bike Sharing Dataset
-- Nama : Feliphus, S.Kom
+- Nama : Feliphus
 - Email: prof.kenwood@gmail.com
     """
 )
