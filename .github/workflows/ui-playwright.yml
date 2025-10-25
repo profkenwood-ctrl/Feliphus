@@ -1,0 +1,56 @@
+name: UI tests (Playwright)
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '30 0 * * *' # run daily at 00:30 UTC
+
+jobs:
+  ui-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install playwright
+          python -m playwright install --with-deps
+
+      - name: Start Streamlit in background
+        run: |
+          nohup streamlit run Main.py --server.headless true --server.port 8501 > streamlit-ui.log 2>&1 &
+          echo $! > .streamlit-ui.pid
+
+      - name: Wait for Streamlit
+        run: |
+          i=0
+          until curl -sSf http://localhost:8501 >/dev/null 2>&1 || [ $i -ge 60 ]; do
+            i=$((i+1))
+            sleep 1
+          done
+          if [ $i -ge 60 ]; then echo "Streamlit did not start in time"; cat streamlit-ui.log || true; exit 2; fi
+
+      - name: Run Playwright UI test
+        run: |
+          python tests/ui_playwright_test.py
+
+      - name: Upload UI log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlit-ui-log
+          path: streamlit-ui.log
+
+      - name: Teardown Streamlit
+        if: always()
+        run: |
+          if [ -f .streamlit-ui.pid ]; then kill "$(cat .streamlit-ui.pid)" || true; fi
