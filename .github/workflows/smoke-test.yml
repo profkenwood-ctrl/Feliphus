@@ -3,6 +3,9 @@ name: Streamlit smoke test
 on:
   push:
   pull_request:
+  schedule:
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
 
 jobs:
   smoke-test:
