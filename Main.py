@@ -11,6 +11,17 @@ sns.set(style="darkgrid")
 
 st.markdown("- Nama: Feliphus, S.Kom  \n- Email: prof.kenwood@gmail.com")
 
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import streamlit as st
+
+st.set_page_config(page_title="Bike Sharing Analysis", layout="wide")
+sns.set(style="darkgrid")
+
+st.title("Proyek Analisis Data: Bike Sharing Dataset")
+st.markdown("- Nama: Feliphus, S.Kom  \n- Email: prof.kenwood@gmail.com")
+
 
 @st.cache_data
 def load_data(url: str) -> pd.DataFrame:
