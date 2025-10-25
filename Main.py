@@ -1,114 +1,108 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 import streamlit as st
 
-sns.set(style='dark')
+st.set_page_config(page_title="Bike Sharing Analysis", layout="wide")
+sns.set(style="darkgrid")
 
-st.set_page_config(page_title="Proyek Analisis Data - Bike Sharing", layout="wide")
+st.markdown("- Nama: Feliphus, S.Kom  \n- Email: prof.kenwood@gmail.com")
 
-st.write(
-    """
-    # Proyek Analisis Data: Bike Sharing Dataset
-- Nama : Feliphus
-- Email: prof.kenwood@gmail.com
-    """
-)
 
+@st.cache_data
+def load_data(url: str) -> pd.DataFrame:
+    df = pd.read_csv(url, parse_dates=["dteday"], dayfirst=False)
+    return df
+
+
+DATA_URL = "https://raw.githubusercontent.com/adinurrohkhim/analisadata_pyton/main/day.csv"
 
 tab1, tab2, tab3 = st.tabs(["FILE DATASET", "VISUALISASI", "CONCLUSION"])
 
 with tab1:
-
-    csv_url = "https://raw.githubusercontent.com/adinurrohkhim/analisadata_pyton/main/day.csv"
-    st.header("File dataset yang di gunakan dalam analisa")
+    st.header("File dataset yang digunakan dalam analisa")
     try:
-        day_df = pd.read_csv(csv_url)
+        day_df = load_data(DATA_URL)
         st.dataframe(day_df)
+        st.markdown("### Metadata singkat")
+        st.write(
+            """
+            - instant: index
+            - dteday : Tanggal
+            - season : musim (1=musim dingin, 2=semi, 3=panas, 4=gugur)
+            - yr : tahun (0:2011, 1:2012)
+            - mnth : bulan (1 to 12)
+            - hr : jam (0 to 23)
+            - holiday : Hari libur, 0 = tidak, 1 = libur
+            - weekday : Hari dalam seminggu
+            - workingday : 1 = hari kerja, 0 = libur
+            - weathersit : kondisi cuaca (1..4)
+            - temp, atemp, hum, windspeed, casual, registered, cnt
+            """
+        )
     except Exception as e:
-        st.error(f"Gagal memuat dataset: {e}")
-        day_df = pd.DataFrame()
-
-    st.write(
-    """
-        #METADATA
-    - instant: index
-    - dteday : Tanggal
-    - season : musim ( 1=salju, 2=semi, 3=panas, 4=gugur)
-    - yr : tahun (0: 2011, 1:2012)
-    - mnth : bulan( 1 to 12)
-    - hr : jam (0 to 23)
-    - holiday : Hari libur , 0 = tidak libur , 1 = libur
-    - weekday : Hari dalam seminggu
-    - workingday : hari kerja libur = 1, kerja masuk = 0
-    - weathersit : Cuaca
-        1: Cerah, Sedikit awan, Berawan sebagian, Berawan sebagian
-        2: Kabut + Berawan, Kabut + Awan pecah, Kabut + Sedikit awan, Kabut
-        3: Salju Ringan, Hujan Ringan + Badai Petir + Awan berserakan, Hujan Ringan + Awan berserakan
-        4: Hujan Lebat + Palet Es + Badai Petir + Kabut, Salju + Kabut
-    - temp : Suhu normal dalam Celsius (t-t_min)/(t_max-t_min), t_min=-8, t_max=+39 (only in hourly scale)
-    - atemp: Suhu dalam. The values are derived via (t-t_min)/(t_max-t_min), t_min=-16, t_max=+50 (only in hourly scale)
-    - hum:  Kelembapan . The values are divided to 100 (max)
-    - windspeed: Kecepatan angin
-    - casual: jumlah pengguna biasa
-    - registered: jumlah pengguna terdaftar
-    - cnt: jumlah total sepeda sewaan termasuk sepeda kasual dan terdaftar
-        """
-    )
+        st.error(f"Gagal memuat data: {e}")
 
 with tab2:
-    st.header("Pilihlah sumber X dan Y")
+    st.header("Visualisasi: pilih sumbu X dan Y")
+    # Load once (cached)
+    data = load_data(DATA_URL)
 
-    def load_data(file_path):
-        return pd.read_csv(file_path)
+    # X choices: all columns
+    x_column = st.selectbox(
+        "Pilih kolom untuk sumbu X",
+        options=list(data.columns),
+        index=list(data.columns).index("season") if "season" in data.columns else 0,
+        key="x_column",
+    )
 
-    def create_bar_chart(data, x_column, y_column):
-        # Convert x to string to avoid plotting issues with many numeric unique values
+    # Y choices: numeric only
+    numeric_cols = data.select_dtypes(include=["number"]).columns.tolist()
+    y_column = st.selectbox(
+        "Pilih kolom untuk sumbu Y (numeric)", options=numeric_cols, index=numeric_cols.index("cnt") if "cnt" in numeric_cols else 0, key="y_column"
+    )
+
+    agg_method = st.selectbox("Agregasi (jika X kategorikal)", options=["sum", "mean", "median"], index=1, key="agg_method")
+
+    if x_column and y_column:
         fig, ax = plt.subplots(figsize=(10, 5))
-        ax.bar(data[x_column].astype(str), data[y_column])
-        ax.set_xlabel(x_column)
-        ax.set_ylabel(y_column)
-        ax.tick_params(axis='x', rotation=45)
+
+        # if X is non-numeric or has few uniques -> aggregate
+        if data[x_column].dtype == "O" or data[x_column].nunique() <= 50:
+            if agg_method == "sum":
+                plot_df = data.groupby(x_column)[y_column].sum().reset_index()
+            elif agg_method == "median":
+                plot_df = data.groupby(x_column)[y_column].median().reset_index()
+            else:
+                plot_df = data.groupby(x_column)[y_column].mean().reset_index()
+
+            # sort by y desc for readability
+            plot_df = plot_df.sort_values(by=y_column, ascending=False)
+            sns.barplot(data=plot_df, x=x_column, y=y_column, ax=ax)
+            ax.set_xlabel(x_column)
+            ax.set_ylabel(y_column)
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+        else:
+            # numeric x: scatter
+            sns.scatterplot(data=data, x=x_column, y=y_column, ax=ax, s=20)
+            ax.set_xlabel(x_column)
+            ax.set_ylabel(y_column)
+
         st.pyplot(fig)
-
-    data_source = csv_url
-    if data_source:
-        try:
-            data = load_data(data_source)
-            x_column = st.selectbox('Pilih kolom untuk sumbu x', data.columns, index=0)
-            y_column = st.selectbox('Pilih kolom untuk sumbu y', data.columns, index=1 if len(data.columns)>1 else 0)
-
-            # If the selected y column is non-numeric, try to coerce to numeric
-            if not pd.api.types.is_numeric_dtype(data[y_column]):
-                with st.spinner('Mencoba mengonversi kolom y ke numeric...'):
-                    data[y_column] = pd.to_numeric(data[y_column], errors='coerce')
-
-            create_bar_chart(data, x_column, y_column)
-        except Exception as e:
-            st.error(f"Gagal membuat visualisasi: {e}")
 
 with tab3:
     st.header("Kesimpulan Analisa")
-
     st.write(
-    """
-    - Conclution pertanyaan 1
-    - - pertanyaan 1 = Bagaimana pengaruh musim dan cuaca terhadap jumlah pesewaan sepeda ?
-    - - Pilihlah sumbu x 'season' , 'wheater'
-    - - pilihlah sumbu y 'cnt '
-    - - pada menu VISUALISASI untuk menjawab perntayaan 1
-   * Jumlah pesewaan sepeda keseluruhan ( jumlah pesewa sepeda yang terdaftar maupun yg tidak terdaftar ) paling tinggi ternjadi pada musim panas yaitu sebesar 1.061.129 orang atau sekitar 32,23 % dari total keseluruhan pesewa sepeda dalam 2 tahun terahir. dan paling rendah pada musim dingin yaitu sebesar 471.348 orang. Sedangkan Untuk Kondisi cuaca Cerah, Sedikit awan, Berawan sebagian, Berawan sebagian mendapat jumlah pesewa sepeda paling tinggi yaitu sebesar 2.257.952 orang.
+        """
+        - Pertanyaan 1: Bagaimana pengaruh musim dan cuaca terhadap jumlah penyewaan sepeda?
+          - Gunakan sumbu X: `season` atau `weathersit`, sumbu Y: `cnt` pada menu VISUALISASI.
 
-    *** Hal ini bisa di katakan Musim dan cuaca sangat berpengaruh terhadap Pesewaan jumlah sepeda
+        - Pertanyaan 2: Apakah hari kerja dan hari libur mempengaruhi jumlah penyewaan?
+          - Gunakan sumbu X: `holiday` atau `workingday`, sumbu Y: `cnt` pada menu VISUALISASI.
 
-    - conclution pertanyaan 2
-    - pertanyaan 2 = Benarkah hari kerja dan hari libur berpengaruh terhadap jumlah pesewaan sepeda ?
-    - - Pilihlah sumbu x 'holiday' , 'workingday'
-    - - pilihlah sumbu y 'cnt '
-    - - pada menu VISUALISASI untuk menjawab perntayaan 2
-   * Jumlah pesewaan sepeda selama weekday tidak terdapat perbedaan yang cukup signifikan. Untuk Jumlah pesewaan sepda pada liburan ( holiday ) cukup tinggi yaitu sebesar 3.214.244 orang dari pada ketika tidak libur .sedangkan untuk jumlah pesewaan sepeda per-Workday dalam kondisi libur dan mask . jumlahnya cukup signifikan dengan perbadingan jumlah ibur dibanding jumlah tidak libur sebesar 1.000.269 : 2.292.410 orang.
-
-   *** Hal ini bisa di katakan Kondisi hari libur dan workday ( saat libur maupun masuk ) sangat mempengaruhi jumlah pesewaan sepeda
-
-    """
+        Note: Untuk variabel kategorikal kita melakukan agregasi (mean/median/sum) agar visualisasinya lebih informatif.
+        """
     )
