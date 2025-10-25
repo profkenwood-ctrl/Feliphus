@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
 import streamlit as st
 
 st.set_page_config(page_title="Bike Sharing Analysis", layout="wide")
@@ -76,9 +77,7 @@ with tab2:
     agg_method = st.selectbox("Agregasi (jika X kategorikal)", options=["sum", "mean", "median"], index=1, key="agg_method")
 
     if x_column and y_column:
-        fig, ax = plt.subplots(figsize=(10, 5))
-
-        # if X is non-numeric or has few uniques -> aggregate
+        # if X is non-numeric or has few uniques -> aggregate and use interactive Plotly bar
         if data[x_column].dtype == "O" or data[x_column].nunique() <= 50:
             if agg_method == "sum":
                 plot_df = data.groupby(x_column)[y_column].sum().reset_index()
@@ -87,22 +86,15 @@ with tab2:
             else:
                 plot_df = data.groupby(x_column)[y_column].mean().reset_index()
 
-            # sort by y desc for readability
             plot_df = plot_df.sort_values(by=y_column, ascending=False)
-            sns.barplot(data=plot_df, x=x_column, y=y_column, ax=ax)
-            ax.set_xlabel(x_column)
-            ax.set_ylabel(y_column)
-            # set ticks explicitly to avoid matplotlib warning about set_xticklabels
-            labels = plot_df[x_column].astype(str).tolist()
-            ax.set_xticks(range(len(labels)))
-            ax.set_xticklabels(labels, rotation=45, ha="right")
+            pfig = px.bar(plot_df, x=x_column, y=y_column, title=f"{y_column} by {x_column}")
+            pfig.update_layout(xaxis_tickangle=-45, template="plotly_white")
+            st.plotly_chart(pfig, use_container_width=True)
         else:
-            # numeric x: scatter
-            sns.scatterplot(data=data, x=x_column, y=y_column, ax=ax, s=20)
-            ax.set_xlabel(x_column)
-            ax.set_ylabel(y_column)
-
-        st.pyplot(fig)
+            # numeric x: scatter using Plotly for interactivity
+            pfig = px.scatter(data, x=x_column, y=y_column, title=f"{y_column} vs {x_column}", height=500)
+            pfig.update_traces(marker=dict(size=6, opacity=0.7))
+            st.plotly_chart(pfig, use_container_width=True)
 
 with tab3:
     st.header("Kesimpulan Analisa")
