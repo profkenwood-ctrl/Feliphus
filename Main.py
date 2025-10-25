@@ -1,9 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import streamlit as st
 
 st.set_page_config(page_title="Bike Sharing Analysis", layout="wide")
@@ -95,7 +92,10 @@ with tab2:
             sns.barplot(data=plot_df, x=x_column, y=y_column, ax=ax)
             ax.set_xlabel(x_column)
             ax.set_ylabel(y_column)
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+            # set ticks explicitly to avoid matplotlib warning about set_xticklabels
+            labels = plot_df[x_column].astype(str).tolist()
+            ax.set_xticks(range(len(labels)))
+            ax.set_xticklabels(labels, rotation=45, ha="right")
         else:
             # numeric x: scatter
             sns.scatterplot(data=data, x=x_column, y=y_column, ax=ax, s=20)
