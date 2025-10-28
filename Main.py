@@ -1,111 +1,117 @@
+# Main.py
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.express as px
 import streamlit as st
 
-st.set_page_config(page_title="Bike Sharing Analysis", layout="wide")
-sns.set(style="darkgrid")
+# === CONFIG ===
+st.set_page_config(
+    page_title="Sales Dashboard",
+    page_icon="📊",
+    layout="wide"
+)
 
-st.markdown("- Nama: Feliphus, S.Kom  \n- Email: prof.kenwood@gmail.com")
-
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import streamlit as st
-
-st.set_page_config(page_title="Bike Sharing Analysis", layout="wide")
-sns.set(style="darkgrid")
-
-st.title("Proyek Analisis Data: Bike Sharing Dataset")
-st.markdown("- Nama: Feliphus, S.Kom  \n- Email: prof.kenwood@gmail.com")
-
-
+# === FUNGSI BACA DATA ===
 @st.cache_data
-def load_data(url: str) -> pd.DataFrame:
-    df = pd.read_csv(url, parse_dates=["dteday"], dayfirst=False)
-    return df
-
-
-DATA_URL = "https://raw.githubusercontent.com/adinurrohkhim/analisadata_pyton/main/day.csv"
-
-tab1, tab2, tab3 = st.tabs(["FILE DATASET", "VISUALISASI", "CONCLUSION"])
-
-with tab1:
-    st.header("File dataset yang digunakan dalam analisa")
+def get_data_from_excel():
     try:
-        day_df = load_data(DATA_URL)
-        st.dataframe(day_df)
-        st.markdown("### Metadata singkat")
-        st.write(
-            """
-            - instant: index
-            - dteday : Tanggal
-            - season : musim (1=musim dingin, 2=semi, 3=panas, 4=gugur)
-            - yr : tahun (0:2011, 1:2012)
-            - mnth : bulan (1 to 12)
-            - hr : jam (0 to 23)
-            - holiday : Hari libur, 0 = tidak, 1 = libur
-            - weekday : Hari dalam seminggu
-            - workingday : 1 = hari kerja, 0 = libur
-            - weathersit : kondisi cuaca (1..4)
-            - temp, atemp, hum, windspeed, casual, registered, cnt
-            """
+        df = pd.read_excel(
+            "supermarkt_sales.xlsx",
+            engine="openpyxl",
+            sheet_name="Sales",
+            skiprows=3,
+            usecols="B:R",
+            nrows=1000
         )
+        # Tambah kolom jam
+        df["hour"] = pd.to_datetime(df["Time"], format="%H:%M:%S", errors="coerce").dt.hour
+        return df
+    except FileNotFoundError:
+        st.error("File 'supermarkt_sales.xlsx' tidak ditemukan! Letakkan di folder yang sama dengan Main.py")
+        st.stop()
     except Exception as e:
-        st.error(f"Gagal memuat data: {e}")
+        st.error(f"Error: {e}")
+        st.stop()
 
-with tab2:
-    st.header("Visualisasi: pilih sumbu X dan Y")
-    # Load once (cached)
-    data = load_data(DATA_URL)
+# === LOAD DATA ===
+df = get_data_from_excel()
 
-    # X choices: all columns
-    x_column = st.selectbox(
-        "Pilih kolom untuk sumbu X",
-        options=list(data.columns),
-        index=list(data.columns).index("season") if "season" in data.columns else 0,
-        key="x_column",
-    )
+# === CEK KOLOM YANG DIPERLUKAN ===
+required_cols = ["City", "Customer type", "Gender", "Total", "Rating", "Time", "Product line"]
+missing_cols = [col for col in required_cols if col not in df.columns]
+if missing_cols:
+    st.error(f"Kolom berikut tidak ditemukan: {missing_cols}")
+    st.stop()
 
-    # Y choices: numeric only
-    numeric_cols = data.select_dtypes(include=["number"]).columns.tolist()
-    y_column = st.selectbox(
-        "Pilih kolom untuk sumbu Y (numeric)", options=numeric_cols, index=numeric_cols.index("cnt") if "cnt" in numeric_cols else 0, key="y_column"
-    )
+# === SIDEBAR FILTER ===
+st.sidebar.header("Filter Data:")
 
-    agg_method = st.selectbox("Agregasi (jika X kategorikal)", options=["sum", "mean", "median"], index=1, key="agg_method")
+city = st.sidebar.multiselect("Pilih Kota:", options=df["City"].unique(), default=df["City"].unique())
+customer_type = st.sidebar.multiselect("Pilih Tipe Pelanggan:", options=df["Customer type"].unique(), default=df["Customer type"].unique())
+gender = st.sidebar.multiselect("Pilih Gender:", options=df["Gender"].unique(), default=df["Gender"].unique())
 
-    if x_column and y_column:
-        # if X is non-numeric or has few uniques -> aggregate and use interactive Plotly bar
-        if data[x_column].dtype == "O" or data[x_column].nunique() <= 50:
-            if agg_method == "sum":
-                plot_df = data.groupby(x_column)[y_column].sum().reset_index()
-            elif agg_method == "median":
-                plot_df = data.groupby(x_column)[y_column].median().reset_index()
-            else:
-                plot_df = data.groupby(x_column)[y_column].mean().reset_index()
+# === FILTER DATA ===
+df_selection = df[
+    (df["City"].isin(city)) &
+    (df["Customer type"].isin(customer_type)) &
+    (df["Gender"].isin(gender))
+]
 
-            plot_df = plot_df.sort_values(by=y_column, ascending=False)
-            pfig = px.bar(plot_df, x=x_column, y=y_column, title=f"{y_column} by {x_column}")
-            pfig.update_layout(xaxis_tickangle=-45, template="plotly_white")
-            st.plotly_chart(pfig, use_container_width=True)
-        else:
-            # numeric x: scatter using Plotly for interactivity
-            pfig = px.scatter(data, x=x_column, y=y_column, title=f"{y_column} vs {x_column}", height=500)
-            pfig.update_traces(marker=dict(size=6, opacity=0.7))
-            st.plotly_chart(pfig, use_container_width=True)
+# === MAIN PAGE ===
+st.title("📊 Sales Dashboard")
+st.markdown("##")
 
-with tab3:
-    st.header("Kesimpulan Analisa")
-    st.write(
-        """
-        - Pertanyaan 1: Bagaimana pengaruh musim dan cuaca terhadap jumlah penyewaan sepeda?
-          - Gunakan sumbu X: `season` atau `weathersit`, sumbu Y: `cnt` pada menu VISUALISASI.
+# === KPI ===
+total_sales = int(df_selection["Total"].sum())
+average_rating = round(df_selection["Rating"].mean(), 1)
+star_rating = "⭐" * int(round(average_rating, 0))
+average_sale = round(df_selection["Total"].mean(), 2)
 
-        - Pertanyaan 2: Apakah hari kerja dan hari libur mempengaruhi jumlah penyewaan?
-          - Gunakan sumbu X: `holiday` atau `workingday`, sumbu Y: `cnt` pada menu VISUALISASI.
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.subheader("Total Penjualan")
+    st.subheader(f"US $ {total_sales:,}")
+with col2:
+    st.subheader("Rata-rata Rating")
+    st.subheader(f"{average_rating} {star_rating}")
+with col3:
+    st.subheader("Rata-rata Transaksi")
+    st.subheader(f"US $ {average_sale}")
 
-        Note: Untuk variabel kategorikal kita melakukan agregasi (mean/median/sum) agar visualisasinya lebih informatif.
-        """
-    )
+st.markdown("---")
+
+# === CHART 1: Sales by Product Line ===
+sales_by_product = df_selection.groupby("Product line", as_index=False)["Total"].sum().sort_values("Total")
+
+fig1 = px.bar(
+    sales_by_product,
+    x="Total", y="Product line",
+    orientation="h",
+    title="<b>Penjualan per Kategori Produk</b>",
+    color_discrete_sequence=["#205295"],
+    template="plotly_white"
+)
+fig1.update_layout(plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(showgrid=False))
+
+# === CHART 2: Sales by Hour ===
+sales_by_hour = df_selection.groupby("hour", as_index=False)["Total"].sum()
+
+fig2 = px.bar(
+    sales_by_hour,
+    x="hour", y="Total",
+    title="<b>Penjualan per Jam</b>",
+    color_discrete_sequence=["#205295"],
+    template="plotly_white"
+)
+fig2.update_layout(xaxis=dict(tickmode="linear"), plot_bgcolor="rgba(0,0,0,0)", yaxis=dict(showgrid=False))
+
+# === TAMPILKAN CHART ===
+col1, col2 = st.columns(2)
+col1.plotly_chart(fig1, use_container_width=True)
+col2.plotly_chart(fig2, use_container_width=True)
+
+# === HIDE STREAMLIT STYLE ===
+st.markdown("""
+<style>
+    #MainMenu, header, footer {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
